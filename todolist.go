@@ -22,8 +22,8 @@ type TodoItemModel struct {
 }
 
 func CreateItem(w http.ResponseWriter, r *http.Request) {
-	description := r.FormValue("description")
-	log.WithFields(log.Fields{"description": description}).Info("Add new TodoItem. Saving to database.")
+	description := r.FormValue("Description")
+	log.WithFields(log.Fields{"Description": description}).Info("Add new TodoItem. Saving to database.")
 	todo := &TodoItemModel{Description: description, Completed: false}
 	db.Create(&todo)
 	result := db.Last(&todo)
@@ -31,7 +31,7 @@ func CreateItem(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result.Value)
 }
 
-func UpdateItem(w http.ResponseWriter, r *http.Request) {
+func UpdateItemCompletion(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, _ := strconv.Atoi(vars["id"])
 
@@ -40,12 +40,30 @@ func UpdateItem(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, `{"updated": false, "error": "Record not found"}`)
 	} else {
-		description := r.FormValue("description")
-		completed, _ := strconv.ParseBool(r.FormValue("completed"))
-		log.WithFields(log.Fields{"Id": id, "Completed": completed}).Info("Updating item")
+		completed, _ := strconv.ParseBool(r.FormValue("Completed"))
+		log.WithFields(log.Fields{"Id": id, "Completed": completed}).Info("Updating item completion")
 		todoitem := &TodoItemModel{}
 		db.First(&todoitem, id)
 		todoitem.Completed = completed
+		db.Save(&todoitem)
+		w.Header().Set("Content-Type", "json/application")
+		io.WriteString(w, `{"updated": true}`)
+	}
+}
+
+func UpdateItemDescription(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, _ := strconv.Atoi(vars["id"])
+
+	err := GetItemById(id)
+	if !err {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"updated": false, "error": "Record not found"}`)
+	} else {
+		description := r.FormValue("Description")
+		log.WithFields(log.Fields{"Id": id}).Info("Updating item description")
+		todoitem := &TodoItemModel{}
+		db.First(&todoitem, id)
 		todoitem.Description = description
 		db.Save(&todoitem)
 		w.Header().Set("Content-Type", "json/application")
@@ -54,9 +72,9 @@ func UpdateItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteItem(w http.ResponseWriter, r *http.Request) {
+	log.Info("Attempting to delete id")
 	vars := mux.Vars(r)
 	id, _ := strconv.Atoi(vars["id"])
-
 	err := GetItemById(id)
 	if !err {
 		w.Header().Set("Content-Type", "application/json")
@@ -122,8 +140,9 @@ func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/health", Health).Methods("GET")
 	router.HandleFunc("/createitem", CreateItem).Methods("POST")
-	router.HandleFunc("/deleteitem", DeleteItem).Methods("POST")
-	router.HandleFunc("/updateitem", UpdateItem).Methods("POST")
+	router.HandleFunc("/deleteitem/{id}", DeleteItem).Methods("DELETE")
+	router.HandleFunc("/updateitemcomplete/{id}", UpdateItemCompletion).Methods("POST")
+	router.HandleFunc("/updateitemdesc/{id}", UpdateItemDescription).Methods("POST")
 	router.HandleFunc("/getcompleted", GetCompletedItems).Methods("GET")
 	router.HandleFunc("/getincompleted", GetIncompleteItems).Methods("GET")
 	http.ListenAndServe(":8000", router)
